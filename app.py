@@ -28,7 +28,7 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-# --- KULLANICI YÖNETİMİ HIZLI YARDIMCI FONKSİYONLAR ---
+# --- KULLANICI YÖNETİMİ YARDIMCI FONKSİYONLARI ---
 def load_users():
     if not os.path.exists(USERS_FILE):
         return {}
@@ -48,7 +48,7 @@ def get_user_data_file(username):
     return os.path.join(USER_DATA_DIR, f"{username}.json")
 
 
-# --- VARSAYILAN ŞABLON VE VERİLER ---
+# --- VARSAYILAN DERSLER VE VERİ YAPISI ---
 DEFAULT_COURSES = {
     "TÜRKÇE": [
         "Sözcükte Anlam", "Cümlede Anlam", "Paragrafta Anlam", "Ses Bilgisi",
@@ -136,9 +136,9 @@ def get_default_user_data():
             tracking[c][t] = {"konu": False, "soru": False, "tekrar": False, "note": ""}
     return {
         "tracking": tracking,
-        "daily_logs": {},  # "YYYY-MM-DD": {"solved": 0, "study_time": 0, "target": 100, "target_time": 120}
-        "schedules": {},   # "YYYY-MM-DD": [{"id": 1, "task": "...", "done": False, "photo": "..."}]
-        "notes": []        # [{"id": 1, "title": "...", "content": "...", "date": "..."}]
+        "daily_logs": {},
+        "schedules": {},
+        "notes": []
     }
 
 
@@ -176,8 +176,8 @@ def save_user_data(username, data):
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-# --- ORTAK HTML ŞABLONU ---
-BASE_HTML = """
+# --- HTML RENDER YARDIMCI FONKSİYONU ---
+BASE_LAYOUT = """
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -190,7 +190,6 @@ BASE_HTML = """
     <style>
         :root {
             --primary-color: #4a90e2;
-            --secondary-color: #50e3c2;
             --bg-color: #f4f7f6;
             --card-bg: #ffffff;
             --text-color: #333333;
@@ -215,7 +214,6 @@ BASE_HTML = """
         .btn-primary { background-color: var(--primary-color); border: none; }
         .btn-primary:hover { background-color: #357abd; }
         .progress { height: 10px; border-radius: 5px; }
-        .status-badge { font-size: 0.8rem; padding: 4px 8px; border-radius: 4px; }
         .stat-card {
             background: linear-gradient(135deg, #6e8efb, #a777e3);
             color: white;
@@ -261,7 +259,7 @@ BASE_HTML = """
             {% endif %}
         {% endwith %}
 
-        {% block content %}{% endblock %}
+        __CONTENT__
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -269,8 +267,12 @@ BASE_HTML = """
 </html>
 """
 
+def render_page(content, **context):
+    full_html = BASE_LAYOUT.replace("__CONTENT__", content)
+    return render_template_string(full_html, **context)
 
-# --- ROTALAR / YÖNLENDİRMELER ---
+
+# --- ROTALAR ---
 
 @app.route("/")
 def index():
@@ -282,8 +284,8 @@ def index():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form.get("username").strip()
-        password = request.form.get("password").strip()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
         users = load_users()
         if username in users and users[username] == password:
             session["user"] = username
@@ -293,8 +295,6 @@ def login():
             flash("Hatalı kullanıcı adı veya şifre!", "danger")
 
     login_html = """
-    {% extends "base" %}
-    {% block content %}
     <div class="row justify-content-center mt-5">
         <div class="col-md-4">
             <div class="card p-4">
@@ -316,16 +316,15 @@ def login():
             </div>
         </div>
     </div>
-    {% endblock %}
     """
-    return render_template_string(BASE_HTML.replace("{% block content %}{% endblock %}", login_html))
+    return render_page(login_html)
 
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
-        username = request.form.get("username").strip()
-        password = request.form.get("password").strip()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
         users = load_users()
 
         if username in users:
@@ -340,8 +339,6 @@ def register():
             return redirect(url_for("login"))
 
     reg_html = """
-    {% extends "base" %}
-    {% block content %}
     <div class="row justify-content-center mt-5">
         <div class="col-md-4">
             <div class="card p-4">
@@ -363,9 +360,8 @@ def register():
             </div>
         </div>
     </div>
-    {% endblock %}
     """
-    return render_template_string(BASE_HTML.replace("{% block content %}{% endblock %}", reg_html))
+    return render_page(reg_html)
 
 
 @app.route("/logout")
@@ -473,8 +469,8 @@ def dashboard():
         });
     </script>
     """
-    return render_template_string(
-        BASE_HTML.replace("{% block content %}{% endblock %}", dash_html),
+    return render_page(
+        dash_html,
         course_stats=course_stats,
         overall_percent=overall_percent,
         completed_topics=completed_topics,
@@ -565,8 +561,8 @@ def tracking():
         </div>
     </form>
     """
-    return render_template_string(
-        BASE_HTML.replace("{% block content %}{% endblock %}", track_html),
+    return render_page(
+        track_html,
         courses=list(DEFAULT_COURSES.keys()),
         selected_course=selected_course,
         tracking=user_data["tracking"]
@@ -642,8 +638,8 @@ def daily_log():
         </div>
     </div>
     """
-    return render_template_string(
-        BASE_HTML.replace("{% block content %}{% endblock %}", log_html),
+    return render_page(
+        log_html,
         selected_date=selected_date,
         log_data=log_data
     )
@@ -761,8 +757,8 @@ def schedule():
         </div>
     </div>
     """
-    return render_template_string(
-        BASE_HTML.replace("{% block content %}{% endblock %}", sch_html),
+    return render_page(
+        sch_html,
         selected_date=selected_date,
         tasks=tasks
     )
@@ -835,8 +831,8 @@ def notes():
         </div>
     </div>
     """
-    return render_template_string(
-        BASE_HTML.replace("{% block content %}{% endblock %}", notes_html),
+    return render_page(
+        notes_html,
         notes_list=user_data.get("notes", [])
     )
 
@@ -846,7 +842,6 @@ def uploaded_file(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 
-# --- UYGULAMA BAŞLATMA VE PORT DÜZENLEMESİ (RENDER UYUMLU) ---
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
